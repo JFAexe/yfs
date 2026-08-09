@@ -1,0 +1,59 @@
+# yfs - tiny go yaml file server
+[![GitHub Release](https://img.shields.io/github/v/release/JFAexe/yfs?style=for-the-badge&color=%2300ADD8)](https://github.com/JFAexe/yfs/releases/latest)
+[![License](https://img.shields.io/github/license/JFAexe/yfs?style=for-the-badge&color=%2300ADD8)](LICENSE)
+
+> Just because you can, doesn't mean you should.
+
+```shell
+echo '
+---
+- path: text/file.txt
+  data: |-
+    raw text file
+- path: binary/file
+  data: !!binary "eWZzCg=="
+' | yfs -a 127.0.0.1 -p 1337
+```
+
+## Installation
+> **DO NOT run any shell commands unless you understand them**
+
+### Building via `go install`
+```shell
+go install -trimpath -ldflags "-s -w" github.com/JFAexe/yfs/cmd/yfs@latest
+```
+
+### Prebuilt binaries for Linux/Darwin via shell
+```shell
+(
+  YFS_SYSTEM="darwin" # "linux"
+  YFS_ARCH="arm64" # "amd64"
+  YFS_PATH="$HOME/.local/bin/"
+
+  YFS_URL=$(curl -sL https://api.github.com/repos/JFAexe/yfs/releases/latest | grep -o "https://[^\"]*${YFS_SYSTEM}_${YFS_ARCH}[^\"]*")
+  YFS_ARCHIVE="$HOME/Downloads/${YFS_URL##*/}"
+
+  curl -sL "$YFS_URL" -o "$YFS_ARCHIVE" && tar -xzf "$YFS_ARCHIVE" -C "$YFS_PATH" "yfs"
+)
+```
+
+### Prebuilt binaries for Windows via powershell
+```powershell
+$YFS_SYSTEM      = "windows"
+$YFS_ARCH        = "amd64"
+$YFS_INSTALL_DIR = "$env:LOCALAPPDATA\yfs"
+
+$RELEASE     = Invoke-RestMethod -Uri "https://api.github.com/repos/JFAexe/yfs/releases/latest"
+$YFS_URL     = $RELEASE.assets.browser_download_url | Where-Object { $_ -match "${YFS_SYSTEM}_${YFS_ARCH}" }
+$YFS_ARCHIVE = "$env:USERPROFILE\Downloads\$($YFS_URL.Split('/')[-1])"
+
+Invoke-WebRequest -Uri $YFS_URL -OutFile $YFS_ARCHIVE
+New-Item -ItemType Directory -Path $YFS_INSTALL_DIR -Force | Out-Null
+Expand-Archive -Path $YFS_ARCHIVE -DestinationPath $YFS_INSTALL_DIR -Force
+
+$ENV_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
+
+if ($ENV_PATH -notlike "*$YFS_INSTALL_DIR*") {
+  [Environment]::SetEnvironmentVariable("Path", "$ENV_PATH;$YFS_INSTALL_DIR", "User")
+}
+```
