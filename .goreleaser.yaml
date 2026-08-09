@@ -1,0 +1,51 @@
+version: 2
+project_name: yfs
+before:
+  hooks:
+  - go mod tidy
+builds:
+- id: yfs-binary
+  main: ./cmd/yfs
+  env:
+  - CGO_ENABLED=0
+  goos:
+  - linux
+  - windows
+  - darwin
+  goarch:
+  - amd64
+  - arm64
+  flags:
+  - -trimpath
+  ldflags:
+  - -s
+  - -w
+  - -buildid=
+  - -X main.version={{ .Version }}
+  - -X main.commit={{ .ShortCommit }}
+  - -X main.date={{ .Date }}
+archives:
+- id: yfs-archive
+  ids:
+  - yfs-binary
+  formats:
+  - tar.gz
+  format_overrides:
+  - goos: windows
+    formats:
+    - zip
+  files:
+  - LICENSE*
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+snapshot:
+  version_template: '{{ .Version }}-next'
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs?:'
+    - '^test:'
+    - '^chore:'
+    - '^bump'
