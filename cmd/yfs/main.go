@@ -83,7 +83,7 @@ func main() {
 	cli.FlagStringer = func(flag cli.Flag) string {
 		return strings.NewReplacer(
 			"\t", "\n\n\t",
-			"\v", "\n\n\t",
+			"\v", "\n\t",
 			"\r ", "\n\t\n\t",
 		).Replace(flagger(flag))
 	}
@@ -229,16 +229,16 @@ func wrapFile(ctx context.Context, file *os.File) (io.ReadCloser, error) {
 		return nil, err
 	}
 
-	if !info.Mode().IsRegular() {
-		r, err := ctxio.WrapFile(file)
-		if err != nil {
-			return nil, err
-		}
-
-		go func() { <-ctx.Done(); r.Close() }() //nolint:errcheck
-
-		return r, nil
+	if info.Mode().IsRegular() {
+		return file, nil
 	}
 
-	return file, nil
+	r, err := ctxio.WrapFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() { <-ctx.Done(); r.Close() }() //nolint:errcheck
+
+	return r, nil
 }
