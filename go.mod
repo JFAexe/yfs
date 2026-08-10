@@ -1,4 +1,4 @@
-module github.com/JFAexe/tem
+module github.com/JFAexe/yfs
 
 go 1.26.0
 
