@@ -17,7 +17,7 @@ const viewerTemplate = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>~{{ .Name }}/</title>
+  <title>~{{ .Name }}</title>
   <style>
     :root { font-family: monospace; font-size: 62.5%; background: #181818; color: #e8e8e8 }
     body { font-size: 1.6rem; margin: 4rem; }
@@ -188,6 +188,8 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name: part,
 			})
 		}
+
+		target += "/"
 	}
 
 	crumbs[len(crumbs)-1].Disable = true
