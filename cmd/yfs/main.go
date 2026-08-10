@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/JFAexe/yfs/pkg/fileserver"
+	"github.com/JFAexe/yfs/pkg/mime"
 	"github.com/JFAexe/yfs/pkg/staticfs"
 )
 
@@ -62,6 +64,22 @@ var app = &cli.Command{
 			Sources: cli.EnvVars("YFS_PORT"),
 			Usage:   "port used by the server\vselects a random port if not specified or set to 0\r",
 		},
+		&cli.StringMapFlag{
+			Name:    "mime",
+			Aliases: []string{"m"},
+			Usage:   "list of mime types for file formats\vformat: extension=mime\r",
+			Config: cli.StringConfig{
+				TrimSpace: true,
+			},
+		},
+		&cli.StringSliceFlag{
+			Name:    "mime-file",
+			Aliases: []string{"f"},
+			Usage:   "list of mime type file paths\vonly real paths are allowed\r",
+			Config: cli.StringConfig{
+				TrimSpace: true,
+			},
+		},
 	},
 	Metadata: map[string]any{
 		"name": os.Args[0],
@@ -71,6 +89,8 @@ var app = &cli.Command{
 			"Supports multiple yaml documents in a single input",
 			"Accepts an array of objects with `path` and `data` keys",
 			"Text values can be raw text or base64 with `!!binary` tag",
+			"Passed mime types and read mime files take precedence over system defaults",
+			"Read mime files are parsed after passed mime types",
 		},
 	},
 	Action: run,
@@ -105,11 +125,13 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, cmd *cli.Command) error {
+func run(ctx context.Context, cmd *cli.Command) (err error) {
 	var (
 		inputPath     = cmd.String("input")
 		listenAddress = cmd.String("address")
 		listenPort    = cmd.Int("port")
+		mimes         = cmd.StringMap("mime")
+		mimeFiles     = cmd.StringSlice("mime-file")
 
 		inputFile = os.Stdin
 	)
@@ -124,6 +146,23 @@ func run(ctx context.Context, cmd *cli.Command) error {
 			return fmt.Errorf("failed to open input file: %w", err)
 		}
 		defer inputFile.Close() //nolint:errcheck
+	}
+
+	if mimes, err = mime.ParseMap(mimes); err != nil {
+		return fmt.Errorf("failed to parse mime type values: %w", err)
+	}
+
+	for _, path := range mimeFiles {
+		types, err := readMIMEFile(ctx, path)
+		if err != nil {
+			return err
+		}
+
+		maps.Copy(mimes, types)
+	}
+
+	if err := mime.BatchRegister(mimes); err != nil {
+		return fmt.Errorf("failed to register mime types: %w", err)
 	}
 
 	sfs, err := initFS(ctx, inputFile)
@@ -219,6 +258,39 @@ func initFS(ctx context.Context, file *os.File) (*staticfs.FS, error) {
 	}
 
 	return staticfs.New(files, staticfs.WithOverwrite(true))
+}
+
+func readMIMEFile(ctx context.Context, path string) (map[string]string, error) {
+	if path := strings.TrimSpace(path); path == "" {
+		return nil, nil
+	}
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get abs path for mime types file: %w", err)
+	}
+
+	file, err := os.Open(abs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open mime types file: %w", err)
+	}
+	defer file.Close() //nolint:errcheck
+
+	rcx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	r, err := wrapFile(rcx, file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create mime types file reader: %w", err)
+	}
+
+	var mimes mime.Map
+
+	if err := mime.NewDecoder(r, mime.WithDecoderAddDot(true), mime.WithDecoderNormalize(true)).Decode(&mimes); err != nil {
+		return nil, fmt.Errorf("failed to parse mime types: %w", err)
+	}
+
+	return mimes, nil
 }
 
 func wrapFile(ctx context.Context, file *os.File) (io.ReadCloser, error) {
