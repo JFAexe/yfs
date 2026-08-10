@@ -26,26 +26,28 @@ go install -trimpath -ldflags "-s -w" github.com/JFAexe/yfs/cmd/yfs@latest
 ### Prebuilt binaries for Linux/Darwin via shell
 ```shell
 (
-  YFS_SYSTEM="darwin" # "linux"
-  YFS_ARCH="arm64" # "amd64"
-  YFS_PATH="$HOME/.local/bin/"
+  YFS_SYSTEM="darwin"
+  YFS_ARCH="arm64"
+  YFS_DOWNLOAD_PATH="$HOME/Downloads"
+  YFS_INSTALL_PATH="$HOME/.local/bin/"
 
   YFS_URL=$(curl -sL https://api.github.com/repos/JFAexe/yfs/releases/latest | grep -o "https://[^\"]*${YFS_SYSTEM}_${YFS_ARCH}[^\"]*")
-  YFS_ARCHIVE="$HOME/Downloads/${YFS_URL##*/}"
+  YFS_ARCHIVE="$YFS_DOWNLOAD_PATH/${YFS_URL##*/}"
 
-  curl -sL "$YFS_URL" -o "$YFS_ARCHIVE" && tar -xzf "$YFS_ARCHIVE" -C "$YFS_PATH" "yfs"
+  curl -sL "$YFS_URL" -o "$YFS_ARCHIVE" && tar -xzf "$YFS_ARCHIVE" -C "$YFS_INSTALL_PATH" "yfs"
 )
 ```
 
 ### Prebuilt binaries for Windows via powershell
 ```powershell
-$YFS_SYSTEM      = "windows"
-$YFS_ARCH        = "amd64"
-$YFS_INSTALL_DIR = "$env:LOCALAPPDATA\yfs"
+$YFS_SYSTEM        = "windows"
+$YFS_ARCH          = "amd64"
+$YFS_DOWNLOAD_PATH = "$env:USERPROFILE\Downloads"
+$YFS_INSTALL_PATH  = "$env:LOCALAPPDATA\yfs"
 
 $RELEASE     = Invoke-RestMethod -Uri "https://api.github.com/repos/JFAexe/yfs/releases/latest"
 $YFS_URL     = $RELEASE.assets.browser_download_url | Where-Object { $_ -match "${YFS_SYSTEM}_${YFS_ARCH}" }
-$YFS_ARCHIVE = "$env:USERPROFILE\Downloads\$($YFS_URL.Split('/')[-1])"
+$YFS_ARCHIVE = "$YFS_DOWNLOAD_PATH\$($YFS_URL.Split('/')[-1])"
 
 Invoke-WebRequest -Uri $YFS_URL -OutFile $YFS_ARCHIVE
 New-Item -ItemType Directory -Path $YFS_INSTALL_DIR -Force | Out-Null
