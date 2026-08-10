@@ -15,9 +15,10 @@ var (
 )
 
 var (
-	_ fs.FS        = (*FS)(nil)
-	_ fs.ReadDirFS = (*FS)(nil)
-	_ fs.StatFS    = (*FS)(nil)
+	_ fs.FS         = (*FS)(nil)
+	_ fs.ReadFileFS = (*FS)(nil)
+	_ fs.ReadDirFS  = (*FS)(nil)
+	_ fs.StatFS     = (*FS)(nil)
 )
 
 type File struct {
@@ -84,6 +85,39 @@ func (s *FS) Open(name string) (fs.File, error) {
 	}
 }
 
+func (s *FS) ReadFile(name string) ([]byte, error) {
+	if name = path.Clean(name); !fs.ValidPath(name) {
+		return nil, &fs.PathError{
+			Op:   "readfile",
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
+	}
+
+	entry, ok := s.entries[name]
+	if !ok {
+		return nil, &fs.PathError{
+			Op:   "readfile",
+			Path: name,
+			Err:  fs.ErrNotExist,
+		}
+	}
+
+	if entry.isDir {
+		return nil, &fs.PathError{
+			Op:   "readfile",
+			Path: name,
+			Err:  ErrIsDir,
+		}
+	}
+
+	data := make([]byte, len(entry.data))
+
+	copy(data, entry.data)
+
+	return data, nil
+}
+
 func (s *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	if name = path.Clean(name); !fs.ValidPath(name) {
 		return nil, &fs.PathError{
@@ -93,22 +127,20 @@ func (s *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 		}
 	}
 
-	if name != "." {
-		entry, ok := s.entries[name]
-		if !ok {
-			return nil, &fs.PathError{
-				Op:   "readdir",
-				Path: name,
-				Err:  fs.ErrNotExist,
-			}
+	entry, ok := s.entries[name]
+	if !ok {
+		return nil, &fs.PathError{
+			Op:   "readdir",
+			Path: name,
+			Err:  fs.ErrNotExist,
 		}
+	}
 
-		if !entry.isDir {
-			return nil, &fs.PathError{
-				Op:   "readdir",
-				Path: name,
-				Err:  ErrIsFile,
-			}
+	if !entry.isDir {
+		return nil, &fs.PathError{
+			Op:   "readdir",
+			Path: name,
+			Err:  ErrIsFile,
 		}
 	}
 
