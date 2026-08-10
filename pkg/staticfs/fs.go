@@ -183,8 +183,14 @@ func (s *FS) init(files []File) error {
 		}
 
 		for dir := path.Dir(clean); dir != "."; dir = path.Dir(dir) {
-			if !s.overwrite {
-				return fmt.Errorf("path conflict: cannot add %#q because %#q is already a file", clean, dir)
+			if e, exists := s.entries[dir]; exists {
+				if e.isDir {
+					continue
+				}
+
+				if !s.overwrite {
+					return fmt.Errorf("path conflict: cannot add %#q because %#q is already a file", clean, dir)
+				}
 			}
 
 			s.entries[dir] = &Entry{
@@ -199,16 +205,6 @@ func (s *FS) init(files []File) error {
 			data: file.Data,
 			size: int64(len(file.Data)),
 			time: now,
-		}
-
-		for dir := path.Dir(clean); dir != "."; dir = path.Dir(dir) {
-			if _, exists := s.entries[dir]; !exists {
-				s.entries[dir] = &Entry{
-					name:  path.Base(dir),
-					isDir: true,
-					time:  now,
-				}
-			}
 		}
 	}
 
