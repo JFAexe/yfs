@@ -21,7 +21,8 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/urfave/cli/v3"
 
-	"github.com/JFAexe/tem/pkg/staticfs"
+	"github.com/JFAexe/yfs/pkg/fileserver"
+	"github.com/JFAexe/yfs/pkg/staticfs"
 )
 
 var (
@@ -65,7 +66,8 @@ var app = &cli.Command{
 	Metadata: map[string]any{
 		"name": os.Args[0],
 		"notes": []string{
-			"The server does not provide custom base paths, auth, or compression",
+			"Does not provide custom base paths, auth, or compression",
+			"Does not render `index.html` as a directory index",
 			"Supports multiple yaml documents in a single input",
 			"Accepts an array of objects with `path` and `data` keys",
 			"Text values can be raw text or base64 with `!!binary` tag",
@@ -138,7 +140,7 @@ func run(ctx context.Context, cmd *cli.Command) error {
 	var (
 		ech = make(chan error, 1)
 		srv = &http.Server{
-			Handler: http.FileServerFS(sfs),
+			Handler: fileserver.New(sfs),
 		}
 	)
 
