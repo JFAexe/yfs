@@ -13,18 +13,20 @@ import (
 	"time"
 )
 
-const viewerTemplate = `<!DOCTYPE html>
+const (
+	defaultRootPath = "$"
+	defaultTemplate = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>~{{ .Name }}</title>
+  <title>{{ .Name }}</title>
   <style>
     :root { font-family: monospace; font-size: 62.5%; background: #181818; color: #e8e8e8 }
-    body { font-size: 1.6rem; margin: 4rem; }
-    span { margin: 0 0.6rem }
+    body { margin: 0 3rem 3rem; font-size: 1.6rem; word-break: break-all; }
     table { border-collapse: collapse; width: 100%; }
-    th { font-size: 1.8em; word-break: break-all; text-align: left; padding: 0 0 1.6rem; }
-    td { font-size: 1.4em; white-space: nowrap; padding: 0.35rem 0; }
+    th { padding: 3rem 0 1.4rem 0; font-size: 2em; background: #181818; position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap; }
+    th span { margin: 0 0.6rem }
+    td { padding: 0.3rem 0; font-size: 1.4em; }
     a, a:visited { text-decoration: none; color: inherit }
     a:hover { text-decoration: underline }
   </style>
@@ -36,11 +38,12 @@ const viewerTemplate = `<!DOCTYPE html>
   </table>
 </body>
 </html>`
+)
 
-type entry struct {
-	URL   string
-	Name  string
-	IsDir bool
+type dir struct {
+	Name    string
+	Crumbs  []crumb
+	Entries []entry
 }
 
 type crumb struct {
@@ -49,22 +52,42 @@ type crumb struct {
 	Disable bool
 }
 
-type dir struct {
-	Name    string
-	Crumbs  []crumb
-	Entries []entry
+type entry struct {
+	URL   string
+	Name  string
+	IsDir bool
+}
+
+type FileServerOption = func(s *FileServer)
+
+func WithRootPath(r string) FileServerOption {
+	return func(s *FileServer) {
+		if r = strings.TrimSpace(r); r == "" {
+			r = defaultRootPath
+		}
+
+		s.rootPath = r
+	}
 }
 
 type FileServer struct {
-	root http.FileSystem
-	tmpl *template.Template
+	filesystem http.FileSystem
+	template   *template.Template
+	rootPath   string
 }
 
-func New(root fs.FS) *FileServer {
-	return &FileServer{
-		root: http.FS(root),
-		tmpl: template.Must(template.New("viewer").Parse(viewerTemplate)),
+func New(root fs.FS, options ...FileServerOption) *FileServer {
+	s := &FileServer{
+		filesystem: http.FS(root),
+		template:   template.Must(template.New("viewer").Parse(defaultTemplate)),
+		rootPath:   defaultRootPath,
 	}
+
+	for _, option := range options {
+		option(s)
+	}
+
+	return s
 }
 
 func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -74,9 +97,7 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := path.Clean("/" + r.URL.Path)
-
-	f, err := s.root.Open(target)
+	f, err := s.filesystem.Open(r.URL.Path)
 	if err != nil {
 		s.error(w, err)
 
@@ -101,7 +122,7 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		u := *r.URL
 		u.Path += "/"
 
-		http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+		http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
 
 		return
 	}
@@ -133,17 +154,43 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var buf bytes.Buffer
+
+	if err := s.template.Execute(&buf, dir{
+		Name:    path.Join(s.rootPath, r.URL.Path) + "/",
+		Crumbs:  breadcrumbs(s.rootPath, r.URL.Path),
+		Entries: entries(files),
+	}); err != nil {
+		s.error(w, err)
+
+		return
+	}
+
+	buf.WriteTo(w) //nolint:errcheck
+}
+
+func (s *FileServer) error(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		http.Error(w, "404 page not found", http.StatusNotFound)
+	case errors.Is(err, fs.ErrPermission):
+		http.Error(w, "403 forbidden", http.StatusForbidden)
+	default:
+		http.Error(w, "500 internal server error", http.StatusInternalServerError)
+	}
+}
+
+func entries(files []fs.FileInfo) []entry {
 	entries := make([]entry, 0, len(files))
 
-	for _, e := range files {
+	for _, info := range files {
 		entry := entry{
-			URL:  (&url.URL{Path: e.Name()}).String(),
-			Name: e.Name(),
+			URL:   encodePath(info.Name()),
+			Name:  info.Name(),
+			IsDir: info.IsDir(),
 		}
 
-		if e.IsDir() {
-			entry.IsDir = true
-			entry.URL += "/"
+		if info.IsDir() {
 			entry.Name += "/"
 		}
 
@@ -165,57 +212,42 @@ func (s *FileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return strings.Compare(a.Name, b.Name)
 	})
 
-	crumbs := []crumb{{
-		URL:  "/",
-		Name: "~",
-	}}
-
-	if target != "/" {
-		var (
-			current = "/"
-			parts   = strings.Split(strings.Trim(target, "/"), "/")
-		)
-
-		for _, part := range parts {
-			if part == "" {
-				continue
-			}
-
-			current = path.Join(current, part) + "/"
-
-			crumbs = append(crumbs, crumb{
-				URL:  (&url.URL{Path: current}).String(),
-				Name: part,
-			})
-		}
-
-		target += "/"
-	}
-
-	crumbs[len(crumbs)-1].Disable = true
-
-	var buf bytes.Buffer
-
-	if err := s.tmpl.Execute(&buf, dir{
-		Name:    target,
-		Crumbs:  crumbs,
-		Entries: entries,
-	}); err != nil {
-		s.error(w, err)
-
-		return
-	}
-
-	buf.WriteTo(w) //nolint:errcheck
+	return entries
 }
 
-func (s *FileServer) error(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		http.Error(w, "404 page not found", http.StatusNotFound)
-	case errors.Is(err, fs.ErrPermission):
-		http.Error(w, "403 forbidden", http.StatusForbidden)
-	default:
-		http.Error(w, "500 internal server error", http.StatusInternalServerError)
+func breadcrumbs(root, target string) []crumb {
+	crumbs := []crumb{{
+		URL:  "/",
+		Name: root,
+	}}
+
+	defer func() { crumbs[len(crumbs)-1].Disable = true }()
+
+	if target == "/" {
+		return crumbs
 	}
+
+	var (
+		current = "/"
+		parts   = strings.Split(strings.Trim(target, "/"), "/")
+	)
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		current = path.Join(current, part) + "/"
+
+		crumbs = append(crumbs, crumb{
+			URL:  encodePath(current),
+			Name: part,
+		})
+	}
+
+	return crumbs
+}
+
+func encodePath(target string) string {
+	return (&url.URL{Path: target}).String()
 }
