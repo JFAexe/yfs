@@ -26,7 +26,7 @@ type File struct {
 	Data []byte
 }
 
-type Option = func(f *FS)
+type Option func(f *FS)
 
 func WithOverwrite(allow bool) Option {
 	return func(f *FS) {

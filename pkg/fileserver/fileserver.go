@@ -58,7 +58,7 @@ type entry struct {
 	IsDir bool
 }
 
-type FileServerOption = func(s *FileServer)
+type FileServerOption func(s *FileServer)
 
 func WithRootPath(r string) FileServerOption {
 	return func(s *FileServer) {

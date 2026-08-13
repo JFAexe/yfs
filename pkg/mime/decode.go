@@ -13,7 +13,7 @@ import (
 
 var ErrBadExtension = errors.New("bad file extension")
 
-type DecoderOption = func(d *Decoder)
+type DecoderOption func(d *Decoder)
 
 func WithDecoderNormalize(val bool) DecoderOption {
 	return func(d *Decoder) {

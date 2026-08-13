@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type EncoderOption = func(e *Encoder)
+type EncoderOption func(e *Encoder)
 
 func WithEncoderStripDot(val bool) EncoderOption {
 	return func(e *Encoder) {
