@@ -64,7 +64,7 @@ go install -trimpath -ldflags "-s -w" github.com/JFAexe/yfs/cmd/yfs@latest
   $YFS_ARCHIVE = "$YFS_DOWNLOAD_PATH\$($YFS_URL.Split('/')[-1])"
 
   Invoke-WebRequest -Uri $YFS_URL -OutFile $YFS_ARCHIVE
-  New-Iyfs -IyfsType Directory -Path $YFS_INSTALL_DIR -Force | Out-Null
+  New-Item -ItemType Directory -Path $YFS_INSTALL_DIR -Force | Out-Null
   Expand-Archive -Path $YFS_ARCHIVE -DestinationPath $YFS_INSTALL_DIR -Force
 
   $ENV_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
